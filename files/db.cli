@@ -1,0 +1,60 @@
+#embed-server --server-config=standalone.xml
+embed-server --server-config=standalone-openshift.xml
+
+### JDBC Driver ###
+module add --name=mysql --resources=mysql-connector-j-8.0.32.jar --dependencies=javax.api,javax.transaction.api
+###
+
+### Proxy ###
+/subsystem=undertow/configuration=handler/reverse-proxy=LBProxy/:add(cached-connections-per-thread=5,connection-idle-timeout=60,connections-per-thread=10,max-request-time=-1,problem-server-retry=30,request-queue-size=10,session-cookie-names=JSESSIONID)
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=backend-host1/:add(host=10.65.41.122,port=8009)
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=backend-host2/:add(host=10.65.41.123,port=8009)
+/subsystem=undertow/configuration=handler/reverse-proxy=LBProxy/host=backend-host1/:add(instance-id=stdSvr11,outbound-socket-binding=backend-host1,path=/simple,scheme=ajp)
+/subsystem=undertow/configuration=handler/reverse-proxy=LBProxy/host=backend-host2/:add(instance-id=stdSvr21,outbound-socket-binding=backend-host2,path=/simple,scheme=ajp)
+/subsystem=undertow/server=default-server/host=default-host/location=\/simple/:add(handler=LBProxy)
+
+
+### ENV ###
+set JNDI_NAME=java:/mysql
+set STORE_NAME=mysql
+set DB_NAME=was
+set POOL_NAME=mysql
+set USER_NAME=was
+set USER_PSW=was
+set MIN_SIZE=10 MAX_SIZE=20
+###
+
+### Datasource ###
+/subsystem=datasources/jdbc-driver=mysql:add(driver-name=mysql,driver-module-name="mysql",driver-class-name="com.mysql.cj.jdbc.Driver")
+#/subsystem=datasources/data-source=$POOL_NAME:add(enabled=true,connection-url=jdbc:mariadb://mariadb-service.mariadb.svc.cluster.local:3306,mariadb-service.mariadb2.svc.cluster.local:3306/$DB_NAME?failoverEnable=true,jndi-name=$JNDI_NAME,driver-name=mariadb)
+/subsystem=datasources/data-source=$POOL_NAME:add(enabled=true,connection-url=jdbc:mysql://10.65.41.122:3306/$DB_NAME,jndi-name=$JNDI_NAME,driver-name=mysql)
+/subsystem=datasources/data-source=$POOL_NAME/connection-properties=connectTimeout:add(value=10000)
+/subsystem=datasources/data-source=$POOL_NAME/connection-properties=socketTimeout:add(value=60000)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=min-pool-size,value=$MIN_SIZE)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=max-pool-size,value=$MAX_SIZE)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=pool-prefill,value=true)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=pool-use-strict-min,value=true)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=user-name,value=$USER_NAME)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=password,value=$USER_PSW)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=background-validation,value=true)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=background-validation-millis,value=10000)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=valid-connection-checker-class-name,value="org.jboss.jca.adapters.jdbc.extensions.mysql.MySQLValidConnectionChecker")
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=exception-sorter-class-name,value="org.jboss.jca.adapters.jdbc.extensions.mysql.MySQLExceptionSorter")
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=query-timeout,value=30)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=idle-timeout-minutes,value=15)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=prepared-statements-cache-size,value=20)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=share-prepared-statements,value=true)
+/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=statistics-enabled, value=true)
+###
+
+### DB Password ENC ###
+#/subsystem=elytron/credential-store=$STORE_NAME:add(location=/opt/server/standalone/credentials/$STORE_NAME.jceks,credential-reference={clear-text=rockplace},create=true)
+#/subsystem=elytron/credential-store=$STORE_NAME:add-alias(alias=$DB_NAME,secret-value=$PASSWORD)
+#/subsystem=datasources/data-source=$POOL_NAME:undefine-attribute(name=password)
+#/subsystem=datasources/data-source=$POOL_NAME:write-attribute(name=credential-reference,value={store=$STORE_NAME,alias=$DB_NAME})
+###
+
+unset JNDI_NAME STORE_NAME DB_NAME POOL_NAME USER_NAME MIN_SIZE MAX_SZIE
+
+stop-embedded-server
+

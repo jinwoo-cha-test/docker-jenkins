@@ -1,0 +1,15 @@
+#embed-server --server-config=standalone.xml
+embed-server --server-config=standalone-openshift.xml
+
+/subsystem=io/worker=default:write-attribute(name=task-max-threads,value=512)
+/subsystem=undertow/servlet-container=default/setting=jsp:write-attribute(name=x-powered-by,value=false)
+
+
+### Locking ###
+/subsystem=infinispan/cache-container=web/distributed-cache=dist/component=locking:remove
+/subsystem=infinispan/cache-container=web/distributed-cache=dist/component=transaction:remove
+###
+
+
+stop-embedded-server
+
